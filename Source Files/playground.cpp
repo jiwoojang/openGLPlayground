@@ -7,9 +7,18 @@
 GLFWwindow* window;
 
 #include <glm/glm.hpp>
-
+#include <glm/gtc/matrix_transform.hpp>	// For matrix transformation functions
+#include <glm/gtx/transform.hpp>	// For rotation matrix
 #include <common/shader.hpp>	// For loading shaders
+
+#include <chrono>	// For high_resolution_clock;
 using namespace glm;
+
+// In degrees per second
+const GLfloat ROTATION_SPEED = 10.0f;
+
+// Time between most two frames in seconds
+GLfloat deltaTime = 0.0f;
 
 int main( void )
 {
@@ -76,11 +85,44 @@ int main( void )
 
 	GLuint programID = LoadShaders("basicVertexShader.glsl", "basicFragmentShader.glsl");
 
+	// 85 degree FOV, 16 x 9 aspect ratio
+	glm::mat4 projectionMatrix = glm::perspective(glm::radians(85.0f), 16.0f / 9.0f, 0.1f, 100.0f);
+
+	// Camera is at (4,3,3), looking at (0,0,0) and the world up vector is (0,1,0)
+	glm::mat4 viewMatrix = glm::lookAt(glm::vec3(4, 3, 3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+
+	// Model matrix set up
+	// Rotate about Z axis
+	glm::vec3 modelRotationAxis(0, 0, 1.0f);
+	glm::mat4 modelMatrix = glm::mat4(1.0f);
+	GLfloat angle = 0.0f;
+
+	// Note the order of multiplication here!!
+	glm::mat4 mvpMatrix = projectionMatrix * viewMatrix * modelMatrix;
+
+	// Get the "uniform" that is named MVP in our shader
+	GLuint matrixID = glGetUniformLocation(programID, "MVP");
+
+	// First time stamp
+	auto begin = std::chrono::high_resolution_clock::now();
+
 	do{
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		
+
 		// Use the shaders we set up earlier
 		glUseProgram(programID);
+
+		// Create a rotation matrix about the z axis
+		glm::mat4 rotationMatrix = glm::rotate((ROTATION_SPEED * deltaTime), modelRotationAxis);
+
+		// Apply rotation matrix to model matrix
+		modelMatrix *= rotationMatrix;
+
+		// Apply model matrix to MVP matrix
+		glm::mat4 mvpMatrix = projectionMatrix * viewMatrix * modelMatrix;
+
+		// Send the matrix to the shader
+		glUniformMatrix4fv(matrixID, 1, GL_FALSE, &mvpMatrix[0][0]);
 
 		// Draw triangle
 		glEnableVertexAttribArray(0);
@@ -101,6 +143,20 @@ int main( void )
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+
+		// Get time between this loop and the last one
+		auto end = std::chrono::high_resolution_clock::now();
+		auto duration = end - begin;
+
+		auto durationInMS = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+		auto durationInS = durationInMS / 1000000.0f;
+
+		deltaTime = durationInS;
+
+		printf("deltaTime is: %f\n", deltaTime);
+
+		// Update last time counted
+		begin = end;
 
 	} // Check if the ESC key was pressed or the window was closed
 	while( glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
