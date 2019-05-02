@@ -5,10 +5,13 @@ layout(location = 0) in vec3 vertexPosition_modelSpace;
 
 layout(location = 1) in vec3 vertexColor;
 
+layout(location = 2) in vec2 vertexUV;
+
 // Output data, for each fragment
 out vec3 fragmentColor;
+out vec2 UV;
 
-// Uniform that gets populated from C++ code
+// Stays constant for entire mesh
 uniform mat4 MVP;
 
 void main()
@@ -17,4 +20,7 @@ void main()
 	gl_Position = MVP * vec4(vertexPosition_modelSpace, 1);
 
 	fragmentColor = vertexColor;
+
+	// UV of the vertex
+    UV = vertexUV;
 }
