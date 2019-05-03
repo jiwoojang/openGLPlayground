@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,6 +14,8 @@ GLFWwindow* window;
 
 #include <chrono>	// For high_resolution_clock
 #include <cmath>	// For fmod
+#include <algorithm>	// For clamp
+
 using namespace glm;
 
 // In degrees per second
@@ -25,6 +28,29 @@ GLfloat deltaTime = 0.0f;
 // BMP loading function  
 GLuint loadBMP_custom(const char * imagepath);
 GLuint loadDDS(const char * imagepath);
+
+// Interfacing function
+void computeMatriciesFromInputs();
+mat4 getProjectionMatrix();
+mat4 getViewMatrix();
+
+// Defaults for interfacing functions
+vec3 position = vec3(0, 0, 5);
+mat4 projectionMatrix;
+mat4 viewMatrix;
+
+float horizontalAngle = M_PI;
+float verticalAngle = 0;
+
+float FOV = 45.0f;
+
+int windowWidth = 0;
+int windowHeight = 0;
+
+const float MOVE_SPEED = 3.0f;
+const float MOUSE_SENS = 0.05f;
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
 int main( void )
 {
@@ -45,6 +71,14 @@ int main( void )
 
 	// Open a window and create its OpenGL context
 	window = glfwCreateWindow( 1024, 768, "Playground", NULL, NULL);
+
+	glfwGetWindowSize(window, &windowWidth, &windowHeight);
+
+	// Scroll callbacks for zoom
+	glfwSetScrollCallback(window, scrollCallback);
+
+	// Enable backface culling
+	glEnable(GL_CULL_FACE);
 
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n" );
@@ -224,20 +258,11 @@ int main( void )
 
 	GLuint programID = LoadShaders("basicVertexShader.glsl", "basicFragmentShader.glsl");
 
-	// 85 degree FOV, 16 x 9 aspect ratio
-	glm::mat4 projectionMatrix = glm::perspective(glm::radians(85.0f), 16.0f / 9.0f, 0.1f, 100.0f);
-
-	// Camera is at (4,3,3), looking at (0,0,0) and the world up vector is (0,1,0)
-	glm::mat4 viewMatrix = glm::lookAt(glm::vec3(4, 3, 3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-
 	// Model matrix set up
 	// Rotate about Z axis
-	glm::vec3 modelRotationAxis(0, 0, 1.0f);
-	glm::mat4 modelMatrix = glm::mat4(1.0f);
+	vec3 modelRotationAxis(0, 1.0f, 0);
+	mat4 modelMatrix = mat4(1.0f);
 	GLfloat angle = 0.0f;
-
-	// Note the order of multiplication here!!
-	glm::mat4 mvpMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
 	// Get the "uniform" that is named MVP in our shader
 	GLuint matrixID = glGetUniformLocation(programID, "MVP");
@@ -253,14 +278,17 @@ int main( void )
 		// Use the shaders we set up earlier
 		glUseProgram(programID);
 
+		// Compute the MVP matrix from keyboard and mouse input
+		computeMatriciesFromInputs();
+
 		// Create a rotation matrix about the z axis
-		glm::mat4 rotationMatrix = glm::rotate((ROTATION_SPEED * deltaTime), modelRotationAxis);
+		mat4 rotationMatrix = rotate((ROTATION_SPEED * deltaTime), modelRotationAxis);
 
 		// Apply rotation matrix to model matrix
 		modelMatrix *= rotationMatrix;
 
 		// Apply model matrix to MVP matrix
-		glm::mat4 mvpMatrix = projectionMatrix * viewMatrix * modelMatrix;
+		mat4 mvpMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
 		// Send the matrix to the shader
 		glUniformMatrix4fv(matrixID, 1, GL_FALSE, &mvpMatrix[0][0]);
@@ -532,3 +560,78 @@ GLuint loadDDS(const char * imagepath)
 	free(buffer);
 	return textureID;
 }
+
+void computeMatriciesFromInputs()
+{
+	// Get mouse position
+	double xPos, yPos;
+	glfwGetCursorPos(window, &xPos, &yPos);
+
+	// Reset mouse position at center screen for next frame
+	glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
+
+	// Compute Angles
+	horizontalAngle	+= MOUSE_SENS * deltaTime * float(windowWidth / 2 - xPos);
+	verticalAngle	+= MOUSE_SENS * deltaTime * float(windowHeight / 2 - yPos);
+
+	// I know this casting is gross
+	verticalAngle = clamp((double)verticalAngle, -M_PI_2, M_PI_2);
+
+	// Generate Spherical coordinate direciton based on angles 
+	vec3 forward(cos(verticalAngle) * sin(horizontalAngle), sin(verticalAngle), cos(verticalAngle) * cos(horizontalAngle));
+
+	// Right vector is always horizontal
+	vec3 right(sin(horizontalAngle - M_PI_2), 0, cos(horizontalAngle - M_PI_2));
+
+	// Up vector is cross of forward and right
+	vec3 up = cross(right, forward);
+
+	// Move forward
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+		position += forward * deltaTime * MOVE_SPEED;
+	}
+
+	// Move backward
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+		position -= forward * deltaTime * MOVE_SPEED;
+	}
+
+	// Strafe right
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+		position += right * deltaTime * MOVE_SPEED;
+	}
+
+	// Strafe left
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+		position -= right * deltaTime * MOVE_SPEED;
+	}
+
+	// Rise Up
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+		position += up * deltaTime * MOVE_SPEED;
+	}
+
+	// Sink Down
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+		position -= up * deltaTime * MOVE_SPEED;
+	}
+
+	projectionMatrix = perspective(radians(FOV), 4.0f / 3.0f, 0.1f, 100.0f);
+	viewMatrix = lookAt(position, position + forward, up);
+}
+
+mat4 getProjectionMatrix()
+{
+	return projectionMatrix;
+}
+
+mat4 getViewMatrix()
+{
+	return viewMatrix;
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	FOV -= 5 * yoffset;
+}
+
