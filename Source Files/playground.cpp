@@ -12,6 +12,7 @@ GLFWwindow* window;
 #include <glm/gtx/transform.hpp>	// For rotation matrix
 #include <common/shader.hpp>	// For loading shaders
 #include <common/objBasicLoader.hpp>	// For loading obj files
+#include <common/vboindexer.hpp>	// For VBO indexing
 
 #include <chrono>	// For high_resolution_clock
 #include <cmath>	// For fmod
@@ -119,11 +120,19 @@ int main( void )
 	std::vector <vec3> vertices; 
 	std::vector <vec2> uvs;
 	std::vector <vec3> normals;
-
+	
 	if (!loadOBJ("suzanne.obj", vertices, uvs, normals))
 	{
 		printf("Failed to load OBJ\n");
 	}
+
+	// Fill VBO index buffer
+	std::vector<unsigned short> indices;
+	std::vector<glm::vec3> indexed_vertices;
+	std::vector<glm::vec2> indexed_uvs;
+	std::vector<glm::vec3> indexed_normals;
+
+	indexVBO(vertices, uvs, normals, indices, indexed_vertices, indexed_uvs, indexed_normals);
 
 	// Load Texture
 	GLuint texture = loadDDS("suzanneuvmap.dds");
@@ -132,20 +141,27 @@ int main( void )
 	GLuint vertexBuffer;
 	GLuint UVBuffer;
 	GLuint normalBuffer;
+	GLuint elementBuffer;
 
 	// Generates a buffer and puts resulting ID in buffer ID's
 	// NOTE, THE ORDER IN THE FOLLOWING FUNCTION CALLS MATTERS! GROUP THEM TOGETHER
+	// We use the indexed buffers now
 	glGenBuffers(1, &vertexBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3), &vertices[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, indexed_vertices.size() * sizeof(vec3), &indexed_vertices[0], GL_STATIC_DRAW);
 	
 	glGenBuffers(1, &UVBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, UVBuffer);
-	glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec3), &uvs[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, indexed_uvs.size() * sizeof(vec3), &indexed_uvs[0], GL_STATIC_DRAW);
 
 	glGenBuffers(1, &normalBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, normalBuffer);
-	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(vec3), &normals[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, indexed_normals.size() * sizeof(vec3), &indexed_normals[0], GL_STATIC_DRAW);
+
+	// Element buffer for VBO indexing
+	glGenBuffers(1, &elementBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
@@ -250,7 +266,16 @@ int main( void )
 			(void*)0                          // array buffer offset
 		);
 
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+		// Index buffer
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer);
+
+		// Draw the triangles !
+		glDrawElements(
+			GL_TRIANGLES,      // mode
+			indices.size(),    // count
+			GL_UNSIGNED_SHORT,   // type
+			(void*)0           // element array buffer offset
+		);
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
@@ -263,6 +288,8 @@ int main( void )
 		auto durationInMS = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 		auto durationInS = durationInMS / 1000000.0f;
 
+		printf("%f ms per frame\n", durationInMS / 1000.0f);
+		
 		deltaTime = durationInS;
 
 		// Update last time counted
