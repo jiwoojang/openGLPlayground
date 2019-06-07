@@ -57,6 +57,7 @@ int windowHeight = 0;
 
 const float MOVE_SPEED = 3.0f;
 const float MOUSE_SENS = 0.05f;
+const float ALPHA = 0.6f;
 
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
@@ -86,7 +87,7 @@ int main( void )
 	glfwSetScrollCallback(window, scrollCallback);
 
 	// Enable backface culling
-	glEnable(GL_CULL_FACE);
+	//glEnable(GL_CULL_FACE);
 
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n" );
@@ -166,6 +167,10 @@ int main( void )
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
 
+	// Enable blending
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	// Accept fragment if it closer to the camera than the former one
 	glDepthFunc(GL_LESS);
 
@@ -178,7 +183,7 @@ int main( void )
 	mat4 modelMatrix = mat4(1.0f);
 	GLfloat angle = 0.0f;
 
-	// Get the "uniform" that is named MVP in our shader
+	// Get the "uniforms" that is named according to the values in our shader
 	GLuint matrixID =	glGetUniformLocation(programID, "MVP");
 	GLuint mID =		glGetUniformLocation(programID, "M");
 	GLuint vID =		glGetUniformLocation(programID, "V");
@@ -186,6 +191,7 @@ int main( void )
 	GLuint lightID =	glGetUniformLocation(programID, "lightPosition_worldSpace");
 	GLuint colorID =	glGetUniformLocation(programID, "lightColor");
 	GLuint strengthID =	glGetUniformLocation(programID, "lightStrength");
+	GLuint alphaID =	glGetUniformLocation(programID, "alpha");
 
 	// First time stamp
 	auto begin = std::chrono::high_resolution_clock::now();
@@ -220,6 +226,9 @@ int main( void )
 		glUniform3f(lightID, lightPos.x, lightPos.y, lightPos.z);
 		glUniform3f(colorID, LIGHT_COLOR.x, LIGHT_COLOR.y, LIGHT_COLOR.z);
 		glUniform1f(strengthID, LIGHT_INTENSITY);
+
+		// Set up alpha channel
+		glUniform1f(alphaID, ALPHA);
 
 		// Bind our texture in Texture Unit 0
 		glActiveTexture(GL_TEXTURE0);

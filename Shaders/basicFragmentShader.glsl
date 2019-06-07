@@ -8,13 +8,14 @@ in vec3 lightDirection_cameraSpace;
 in vec3 normal_cameraSpace;
 
 // Output data
-out vec3 color;
+out vec4 color;
 
 // Values that stay constant for the whole mesh
 uniform sampler2D	textureSampler;
 uniform vec3		lightColor;
 uniform float		lightStrength;
 uniform vec3		lightPosition_worldSpace;
+uniform float		alpha;
 
 void main()
 {
@@ -49,7 +50,7 @@ void main()
 	// Final Color Calc
 	//--------------------------------------------
 
-	color = 
+	color.rgb = 
 
 	// Ambient lighting
 	materialAmbientColor +
@@ -60,4 +61,6 @@ void main()
 
 	// Specilar lighting from reflection intensity
 	materialSpecularColor * lightColor * lightStrength * pow(cosAlpha,5) / (distance*distance);
+
+	color.a = alpha;
 }
